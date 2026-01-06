@@ -1,0 +1,147 @@
+x-superset-depends-on: &superset-depends-on
+  - db
+  - redis
+
+x-superset-volumes: &superset-volumes
+  - ./docker:/app/docker
+  - superset_home:/app/superset_home
+
+x-common-build: &common-build
+  context: .
+  target: passwords
+  cache_from:
+    - apache/superset-cache:3.10-slim-bookworm
+
+services:
+  redis:
+    image: redis:7
+    container_name: superset_cache
+    restart: unless-stopped
+    command: ["redis-server", "--maxmemory", "512mb", "--maxmemory-policy", "allkeys-lru"]
+    volumes:
+      - redis:/data
+    networks:
+      - clickhouse-superset
+    deploy:
+      resources:
+        limits:
+          memory: 1g
+          cpus: "0.5"
+
+  db:
+    image: postgres:15
+    container_name: superset_db
+    restart: unless-stopped
+    env_file:
+      - docker/.env
+      #- docker/.env-local
+    volumes:
+      - db_home:/var/lib/postgresql/data
+      - ./docker/docker-entrypoint-initdb.d:/docker-entrypoint-initdb.d
+    networks:
+      - clickhouse-superset
+    deploy:
+      resources:
+        limits:
+          memory: 2g
+          cpus: "1.0"
+
+  superset:
+    build:
+      <<: *common-build
+    container_name: superset_app
+    command: >
+      /app/docker/docker-bootstrap.sh app-gunicorn
+      --workers 3 --threads 2 --timeout 60
+    env_file:
+      - docker/.env
+      #- docker/.env-local
+    user: "root"
+    restart: unless-stopped
+    ports:
+      - 8090:8088
+    depends_on: *superset-depends-on
+    volumes: *superset-volumes
+    networks:
+      - clickhouse-superset
+    deploy:
+      resources:
+        limits:
+          memory: 3g
+          cpus: "2.0"
+
+  superset-init:
+    build:
+      <<: *common-build
+    container_name: superset_init
+    command: ["/app/docker/docker-init.sh"]
+    env_file:
+      - docker/.env
+      #- docker/.env-local
+    depends_on: *superset-depends-on
+    user: "root"
+    volumes: *superset-volumes
+    healthcheck:
+      disable: true
+    networks:
+      - clickhouse-superset
+
+  superset-worker:
+    build:
+      <<: *common-build
+    container_name: superset_worker
+    command: ["/app/docker/docker-bootstrap.sh", "worker"]
+    env_file:
+      - docker/.env
+      #- docker/.env-local
+    restart: unless-stopped
+    depends_on: *superset-depends-on
+    user: "root"
+    volumes: *superset-volumes
+    environment:
+      - CELERYD_CONCURRENCY=2
+      - CELERYD_TASK_TIME_LIMIT=300
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A superset.tasks.celery_app:app inspect ping -d celery@$$HOSTNAME"]
+    networks:
+      - clickhouse-superset
+    deploy:
+      resources:
+        limits:
+          memory: 2g
+          cpus: "1.0"
+
+  superset-worker-beat:
+    build:
+      <<: *common-build
+    container_name: superset_worker_beat
+    command: ["/app/docker/docker-bootstrap.sh", "beat"]
+    env_file:
+      - docker/.env
+      #- docker/.env-local
+    restart: unless-stopped
+    depends_on: *superset-depends-on
+    user: "root"
+    volumes: *superset-volumes
+    healthcheck:
+      disable: true
+    networks:
+      - clickhouse-superset
+    deploy:
+      resources:
+        limits:
+          memory: 1g
+          cpus: "0.5"
+
+volumes:
+  superset_home:
+    external: false
+  db_home:
+    external: false
+  redis:
+    external: false
+
+networks:
+  clickhouse-superset:
+    external: true
+    name: clickhouse-superset
