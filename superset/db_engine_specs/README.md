@@ -436,7 +436,7 @@ postgresql://admin:password123@db.example.org:5432/db2
 
 The password is not the only piece of information where security is critical. For many databases (like BigQuery), sensitive information is stored in the credentials JSON payload. For example:
 
-```json
+<!-- ```json
 {
   "type": "service_account",
   "project_id": "dbt-tutorial-347100",
@@ -449,7 +449,7 @@ The password is not the only piece of information where security is critical. Fo
   "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
   "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/dbt-user-278%40dbt-tutorial-347100.iam.gserviceaccount.com"
 }
-```
+``` -->
 
 Similarly to password, we don't want to send `private_key` to the client when a database is edited; the Superset API should never return its actual contents. Instead, Superset should return a masked value, and users should be able to edit the JSON without having to type in the `private_key` on every edit.
 
