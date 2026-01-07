@@ -33,7 +33,7 @@ services:
         --firstname Admin \
         --lastname User \
         --email admin@local \
-        --password admin123 &&
+        --password admin123 || true &&
       superset init &&
       superset run -h 0.0.0.0 -p 8088
       "
