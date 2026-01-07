@@ -40,3 +40,9 @@ services:
 
 volumes:
   db_home:
+
+networks:
+  clickhouse-superset:
+    external: true
+    name: clickhouse-superset
+
