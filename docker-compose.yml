@@ -1,108 +1,36 @@
-
-x-superset-depends-on: &superset-depends-on
-  - db
-  - redis
-
-x-superset-volumes: &superset-volumes
-  - ./docker:/app/docker
-  - superset_home:/app/superset_home
-
 services:
   redis:
     image: redis:7
     container_name: superset_cache
-    restart: unless-stopped
-    command: ["redis-server", "--maxmemory", "512mb", "--maxmemory-policy", "allkeys-lru"]
-    volumes:
-      - redis:/data
-    networks:
-      - clickhouse-superset
+    command: ["redis-server", "--maxmemory", "256mb", "--maxmemory-policy", "allkeys-lru"]
 
   db:
     image: postgres:15
     container_name: superset_db
-    restart: unless-stopped
-    env_file:
-      - docker/.env
+    environment:
+      POSTGRES_DB: superset
+      POSTGRES_USER: superset
+      POSTGRES_PASSWORD: superset
     volumes:
       - db_home:/var/lib/postgresql/data
-      - ./docker/docker-entrypoint-initdb.d:/docker-entrypoint-initdb.d
-    networks:
-      - clickhouse-superset
 
   superset:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    image: superset-custom
+    image: apache/superset:latest
     container_name: superset_app
-    command: >
-      /app/docker/docker-bootstrap.sh app-gunicorn
-      --workers 3 --threads 2 --timeout 60
-    env_file:
-      - docker/.env
-    user: "root"
-    restart: unless-stopped
     ports:
-      - 8090:8088
-    depends_on: *superset-depends-on
-    volumes: *superset-volumes
-    networks:
-      - clickhouse-superset
-
-  superset-init:
-    image: apache/superset:latest
-    container_name: superset_init
-    command: ["/app/docker/docker-init.sh"]
-    env_file:
-      - docker/.env
-    depends_on: *superset-depends-on
-    user: "root"
-    volumes: *superset-volumes
-    healthcheck:
-      disable: true
-    networks:
-      - clickhouse-superset
-
-  superset-worker:
-    image: apache/superset:latest
-    container_name: superset_worker
-    command: ["/app/docker/docker-bootstrap.sh", "worker"]
-    env_file:
-      - docker/.env
-    restart: unless-stopped
-    depends_on: *superset-depends-on
-    user: "root"
-    volumes: *superset-volumes
+      - "8090:8088"
+    depends_on:
+      - db
+      - redis
     environment:
-      - CELERYD_CONCURRENCY=2
-      - CELERYD_TASK_TIME_LIMIT=300
-    healthcheck:
-      test: ["CMD-SHELL", "celery -A superset.tasks.celery_app:app inspect ping -d celery@$$HOSTNAME"]
-    networks:
-      - clickhouse-superset
-
-  superset-worker-beat:
-    image: apache/superset:latest
-    container_name: superset_worker_beat
-    command: ["/app/docker/docker-bootstrap.sh", "beat"]
-    env_file:
-      - docker/.env
-    restart: unless-stopped
-    depends_on: *superset-depends-on
-    user: "root"
-    volumes: *superset-volumes
-    healthcheck:
-      disable: true
-    networks:
-      - clickhouse-superset
+      SUPERSET_SECRET_KEY: testkey
+    command: >
+      bash -c "
+      pip install psycopg2-binary clickhouse-connect &&
+      superset db upgrade &&
+      superset init &&
+      superset run -h 0.0.0.0 -p 8088
+      "
 
 volumes:
-  superset_home:
   db_home:
-  redis:
-
-networks:
-  clickhouse-superset:
-    driver: bridge
-
