@@ -31,7 +31,10 @@ services:
       - clickhouse-superset
 
   superset:
-    image: apache/superset:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: superset-custom
     container_name: superset_app
     command: >
       /app/docker/docker-bootstrap.sh app-gunicorn
