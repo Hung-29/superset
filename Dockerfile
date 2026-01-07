@@ -172,6 +172,8 @@ RUN --mount=type=cache,target=/root/.cache/pip \
   && apt-get autoremove -yqq --purge build-essential \
   && rm -rf /var/lib/apt/lists/*
 
+RUN /app/.venv/bin/pip install psycopg2-binary
+
 USER superset
 ######################################################################
 # CI image...
