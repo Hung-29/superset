@@ -49,5 +49,5 @@ volumes:
 
 networks:
   clickhouse-superset:
-    external: true
     name: clickhouse-superset
+    driver: bridge
